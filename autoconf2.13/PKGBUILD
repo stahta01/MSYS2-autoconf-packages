@@ -2,14 +2,14 @@
 
 pkgname=autoconf2.13
 pkgver=2.13
-pkgrel=5
+pkgrel=6
 pkgdesc="A GNU tool for automatically configuring source code"
 arch=('any')
 license=('GPL2' 'GPL3' 'custom')
 url="https://www.gnu.org/software/autoconf"
 depends=('awk' 'm4' 'diffutils' 'bash' 'perl')
-makedepends=('make')
-# for test-suite
+makedepends=('gcc' 'make' 'patch' 'texinfo')
+checkdepends=('dejagnu' 'gcc-fortran')
 source=(https://ftp.gnu.org/pub/gnu/autoconf/autoconf-${pkgver}.tar.gz
         0001-autoconf-2.13-version-specific-share-directory.patch
         autoconf2.1-texinfo.patch
