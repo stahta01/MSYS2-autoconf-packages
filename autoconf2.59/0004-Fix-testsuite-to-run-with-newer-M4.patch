@@ -1,0 +1,695 @@
+From 2e1f1dd3442dfc163499a1887f6e24068def4aee Mon Sep 17 00:00:00 2001
+From: Stepan Kasal <kasal@ucw.cz>
+Date: Mon, 11 Sep 2006 16:42:57 +0000
+Subject: Fix testsuite to run with newer M4.
+
+This patch is a few git commits merged.
+---
+ ChangeLog                | 50 +++++++++++++++++++++++++++++++++++++
+ Makefile.in              |  1 +
+ bin/Makefile.am          | 31 ++++++++++++-----------
+ bin/Makefile.in          | 28 +++++++++++----------
+ bin/autom4te.in          |  4 +--
+ config/Makefile.in       |  1 +
+ config/m4.m4             | 19 +++++++++++---
+ configure                | 20 ++++++++++++++-
+ doc/Makefile.in          |  1 +
+ lib/Autom4te/Makefile.in |  1 +
+ lib/Makefile.in          |  1 +
+ lib/autoconf/Makefile.in |  1 +
+ lib/autoscan/Makefile.in |  1 +
+ lib/autotest/Makefile.in |  1 +
+ lib/emacs/Makefile.in    |  1 +
+ lib/m4sugar/Makefile.in  |  1 +
+ man/Makefile.in          |  1 +
+ man/autom4te.1           |  2 +-
+ tests/Makefile.in        |  1 +
+ tests/local.at           | 41 +++++++++++++++++++-----------
+ tests/m4sugar.at         | 54 +++++++++++++++++++---------------------
+ tests/tools.at           | 23 ++++++-----------
+ 22 files changed, 191 insertions(+), 93 deletions(-)
+
+diff --git a/ChangeLog b/ChangeLog
+index bfcdb9f6..b5ec14e3 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,53 @@
++2008-12-24  Eric Blake  <ebb9@byu.net>
++
++	Regenerate files.
++	* Makefile.in: Regenerate with previous patch.
++	* bin/Makefile.in: Likewise.
++	* config/Makefile.in: Likewise.
++	* configure: Likewise.
++	* doc/Makefile.in: Likewise.
++	* lib/Autom4te/Makefile.in: Likewise.
++	* lib/Makefile.in: Likewise.
++	* lib/autoconf/Makefile.in: Likewise.
++	* lib/autoscan/Makefile.in: Likewise.
++	* lib/autotest/Makefile.in: Likewise.
++	* lib/emacs/Makefile.in: Likewise.
++	* lib/m4sugar/Makefile.in: Likewise.
++	* man/Makefile.in: Likewise.
++	* man/autom4te.1: Likewise.
++	* tests/Makefile.in: Likewise.
++
++2006-09-19  Eric Blake  <ebb9@byu.net>
++
++	Avoid M4 1.6 warnings about deprecated option.
++	* config/m4.m4 (AC_PROG_GNU_M4): Check for m4 --debugfile support.
++	* bin/Makefile.am (edit): Substitute M4_DEBUGFILE.
++	* bin/autom4te.in (handle_m4): Favor --debugfile over misnamed
++	--error-output, to avoid warnings with M4 1.6.
++
++2007-12-12  Eric Blake  <ebb9@byu.net>
++
++	Fix spurious testsuite failure with M4 1.4.11.
++	* tests/local.at (AT_CHECK_M4): Cater to new m4 error message.
++
++2006-10-26  Eric Blake  <ebb9@byu.net>
++
++	* tests/m4sugar.at (m4_warn, m4_require: circular dependencies):
++	Also work with M4 1.4.8.
++
++2006-10-24  Paul Eggert  <eggert@cs.ucla.edu>
++
++	* tests/tools.at (autoconf --trace: user macros): Remove test
++	for tracing multiline macros, since m4 1.4.7a uses a different
++	way to number lines.  Problem reported by Ralf Wildenhues.
++
++2006-09-11  Stepan Kasal  <kasal@ucw.cz>
++
++	* tests/local.at (AT_CHECK_M4): Fix this so that the testsuite
++	  works with GNU M4 1.4.3 again; make the normalized form
++	  match the current m4 message; fix the description.
++	* test/tools.at (autom4te cache): Adapt to the change.
++
+ 2008-03-24  Eric Blake  <ebb9@byu.net>
+ 
+ 	Work with M4 1.6 change to FIFO m4wrap.
+diff --git a/Makefile.in b/Makefile.in
+index ee61bb98..f88bc3fa 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -101,6 +101,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/bin/Makefile.am b/bin/Makefile.am
+index 378f7f98..b8675253 100644
+--- a/bin/Makefile.am
++++ b/bin/Makefile.am
+@@ -1,7 +1,9 @@
+ ## Process this file with automake to create Makefile.in. -*-Makefile-*-
+ 
+ ## Makefile for Autoconf.
+-## Copyright (C) 1999, 2000, 2001, 2002 Free Software Foundation, Inc.
++
++## Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2008
++## Free Software Foundation, Inc.
+ 
+ ## This program is free software; you can redistribute it and/or modify
+ ## it under the terms of the GNU General Public License as published by
+@@ -36,19 +38,20 @@ CLEANFILES = $(bin_SCRIPTS)
+ ## ------------- ##
+ 
+ edit = sed \
+-	-e 's,@SHELL\@,$(SHELL),g' \
+-	-e 's,@PERL\@,$(PERL),g' \
+-	-e 's,@bindir\@,$(bindir),g' \
+-	-e 's,@datadir\@,$(pkgdatadir),g' \
+-	-e 's,@prefix\@,$(prefix),g' \
+-	-e 's,@autoconf-name\@,'`echo autoconf | sed '$(transform)'`',g' \
+-	-e 's,@autoheader-name\@,'`echo autoheader | sed '$(transform)'`',g' \
+-	-e 's,@autom4te-name\@,'`echo autom4te | sed '$(transform)'`',g' \
+-	-e 's,@M4\@,$(M4),g' \
+-	-e 's,@AWK\@,$(AWK),g' \
+-	-e 's,@VERSION\@,$(VERSION),g' \
+-	-e 's,@PACKAGE_NAME\@,$(PACKAGE_NAME),g' \
+-	-e 's,@configure_input\@,Generated from $<; do not edit by hand.,g'
++	-e 's|@SHELL[@]|$(SHELL)|g' \
++	-e 's|@PERL[@]|$(PERL)|g' \
++	-e 's|@bindir[@]|$(bindir)|g' \
++	-e 's|@datadir[@]|$(pkgdatadir)|g' \
++	-e 's|@prefix[@]|$(prefix)|g' \
++	-e 's|@autoconf-name[@]|'`echo autoconf | sed '$(transform)'`'|g' \
++	-e 's|@autoheader-name[@]|'`echo autoheader | sed '$(transform)'`'|g' \
++	-e 's|@autom4te-name[@]|'`echo autom4te | sed '$(transform)'`'|g' \
++	-e 's|@M4[@]|$(M4)|g' \
++	-e 's|@M4_DEBUGFILE[@]|$(M4_DEBUGFILE)|g' \
++	-e 's|@AWK[@]|$(AWK)|g' \
++	-e 's|@VERSION[@]|$(VERSION)|g' \
++	-e 's|@PACKAGE_NAME[@]|$(PACKAGE_NAME)|g' \
++	-e 's|@configure_input[@]|Generated from $@.in; do not edit by hand.|g'
+ 
+ # autoconf is written in M4sh.
+ AUTOM4SH = $(top_builddir)/tests/autom4te --language M4sh --cache ''
+diff --git a/bin/Makefile.in b/bin/Makefile.in
+index 27ac0547..97e5c5f0 100644
+--- a/bin/Makefile.in
++++ b/bin/Makefile.in
+@@ -75,6 +75,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+@@ -187,19 +188,20 @@ EXTRA_DIST = autoconf.in autoheader.in autoreconf.in autoupdate.in ifnames.in \
+ # Files that should be removed, but which Automake does not know.
+ CLEANFILES = $(bin_SCRIPTS)
+ edit = sed \
+-	-e 's,@SHELL\@,$(SHELL),g' \
+-	-e 's,@PERL\@,$(PERL),g' \
+-	-e 's,@bindir\@,$(bindir),g' \
+-	-e 's,@datadir\@,$(pkgdatadir),g' \
+-	-e 's,@prefix\@,$(prefix),g' \
+-	-e 's,@autoconf-name\@,'`echo autoconf | sed '$(transform)'`',g' \
+-	-e 's,@autoheader-name\@,'`echo autoheader | sed '$(transform)'`',g' \
+-	-e 's,@autom4te-name\@,'`echo autom4te | sed '$(transform)'`',g' \
+-	-e 's,@M4\@,$(M4),g' \
+-	-e 's,@AWK\@,$(AWK),g' \
+-	-e 's,@VERSION\@,$(VERSION),g' \
+-	-e 's,@PACKAGE_NAME\@,$(PACKAGE_NAME),g' \
+-	-e 's,@configure_input\@,Generated from $<; do not edit by hand.,g'
++	-e 's|@SHELL[@]|$(SHELL)|g' \
++	-e 's|@PERL[@]|$(PERL)|g' \
++	-e 's|@bindir[@]|$(bindir)|g' \
++	-e 's|@datadir[@]|$(pkgdatadir)|g' \
++	-e 's|@prefix[@]|$(prefix)|g' \
++	-e 's|@autoconf-name[@]|'`echo autoconf | sed '$(transform)'`'|g' \
++	-e 's|@autoheader-name[@]|'`echo autoheader | sed '$(transform)'`'|g' \
++	-e 's|@autom4te-name[@]|'`echo autom4te | sed '$(transform)'`'|g' \
++	-e 's|@M4[@]|$(M4)|g' \
++	-e 's|@M4_DEBUGFILE[@]|$(M4_DEBUGFILE)|g' \
++	-e 's|@AWK[@]|$(AWK)|g' \
++	-e 's|@VERSION[@]|$(VERSION)|g' \
++	-e 's|@PACKAGE_NAME[@]|$(PACKAGE_NAME)|g' \
++	-e 's|@configure_input[@]|Generated from $@.in; do not edit by hand.|g'
+ 
+ 
+ # autoconf is written in M4sh.
+diff --git a/bin/autom4te.in b/bin/autom4te.in
+index b9386c4f..4312da29 100644
+--- a/bin/autom4te.in
++++ b/bin/autom4te.in
+@@ -448,7 +448,7 @@ sub handle_m4 ($@)
+ {
+   my ($req, @macro) = @_;
+ 
+-  # GNU m4 appends when using --error-output.
++  # GNU m4 appends when using --debugfile/--error-output.
+   unlink ($tcache . $req->id . "t");
+ 
+   # Run m4.
+@@ -461,7 +461,7 @@ sub handle_m4 ($@)
+ 	   . join (' --include=', '', @include)
+ 	   . ' --debug=aflq'
+ 	   . (!exists $ENV{'AUTOM4TE_NO_FATAL'} ? ' --fatal-warning' : '')
+-	   . " --error-output=$tcache" . $req->id . "t"
++	   . " @M4_DEBUGFILE@=$tcache" . $req->id . "t"
+ 	   . join (' --trace=',   '', sort @macro)
+ 	   . " " . files_to_options (@ARGV)
+ 	   . ' </dev/null'
+diff --git a/config/Makefile.in b/config/Makefile.in
+index f7fcf690..3bd05915 100644
+--- a/config/Makefile.in
++++ b/config/Makefile.in
+@@ -70,6 +70,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/config/m4.m4 b/config/m4.m4
+index 7c9145e0..69257aa2 100644
+--- a/config/m4.m4
++++ b/config/m4.m4
+@@ -1,4 +1,4 @@
+-# Copyright 2000 Free Software Foundation, Inc.
++# Copyright (C) 2000, 2006, 2008 Free Software Foundation, Inc.
+ #
+ # This program is free software; you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+@@ -18,12 +18,23 @@
+ # AC_PROG_GNU_M4
+ # --------------
+ # Check for GNU m4, at least 1.3 (supports frozen files).
++# Also, check whether --error-output (through 1.4.x, but warns in 1.6)
++# or --debugfile (since 1.4.7) is supported, and AC_SUBST M4_DEBUGFILE.
+ AC_DEFUN([AC_PROG_GNU_M4],
+-[AC_PATH_PROGS(M4, gm4 gnum4 m4, m4)
+-AC_CACHE_CHECK(whether m4 supports frozen files, ac_cv_prog_gnu_m4,
++[AC_PATH_PROGS([M4], [gm4 gnum4 m4], [m4])
++AC_CACHE_CHECK([whether m4 supports frozen files], [ac_cv_prog_gnu_m4],
+ [ac_cv_prog_gnu_m4=no
+ if test x"$M4" != x; then
+   case `$M4 --help < /dev/null 2>&1` in
+     *reload-state*) ac_cv_prog_gnu_m4=yes ;;
+   esac
+-fi])])
++fi])
++if test $ac_cv_prog_gnu_m4 = yes ; then
++  AC_CACHE_CHECK([how m4 supports trace files], [ac_cv_prog_gnu_m4_debugfile],
++[case `$M4 --help < /dev/null 2>&1` in
++  *debugfile*) ac_cv_prog_gnu_m4_debugfile=--debugfile ;;
++  *) ac_cv_prog_gnu_m4_debugfile=--error-output ;;
++esac])
++AC_SUBST([M4_DEBUGFILE], $ac_cv_prog_gnu_m4_debugfile)
++fi
++])
+diff --git a/configure b/configure
+index 584400c7..b9776ba5 100755
+--- a/configure
++++ b/configure
+@@ -274,7 +274,7 @@ PACKAGE_STRING='GNU Autoconf 2.59'
+ PACKAGE_BUGREPORT='bug-autoconf@gnu.org'
+ 
+ ac_unique_file="ChangeLog"
+-ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA CYGPATH_W PACKAGE VERSION ACLOCAL AUTOCONF AUTOMAKE AUTOHEADER MAKEINFO install_sh STRIP ac_ct_STRIP INSTALL_STRIP_PROGRAM mkdir_p AWK SET_MAKE am__leading_dot AMTAR am__tar am__untar EXPR M4 HELP2MAN PERL TEST_EMACS EMACS EMACSLOADPATH lispdir LIBOBJS LTLIBOBJS'
++ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS INSTALL_PROGRAM INSTALL_SCRIPT INSTALL_DATA CYGPATH_W PACKAGE VERSION ACLOCAL AUTOCONF AUTOMAKE AUTOHEADER MAKEINFO install_sh STRIP ac_ct_STRIP INSTALL_STRIP_PROGRAM mkdir_p AWK SET_MAKE am__leading_dot AMTAR am__tar am__untar EXPR M4 M4_DEBUGFILE HELP2MAN PERL TEST_EMACS EMACS EMACSLOADPATH lispdir LIBOBJS LTLIBOBJS'
+ ac_subst_files=''
+ 
+ # Initialize some variables set by options.
+@@ -1827,6 +1827,23 @@ fi
+ fi
+ echo "$as_me:$LINENO: result: $ac_cv_prog_gnu_m4" >&5
+ echo "${ECHO_T}$ac_cv_prog_gnu_m4" >&6
++if test $ac_cv_prog_gnu_m4 = yes ; then
++  echo "$as_me:$LINENO: checking how m4 supports trace files" >&5
++echo $ECHO_N "checking how m4 supports trace files... $ECHO_C" >&6
++if test "${ac_cv_prog_gnu_m4_debugfile+set}" = set; then
++  echo $ECHO_N "(cached) $ECHO_C" >&6
++else
++  case `$M4 --help < /dev/null 2>&1` in
++  *debugfile*) ac_cv_prog_gnu_m4_debugfile=--debugfile ;;
++  *) ac_cv_prog_gnu_m4_debugfile=--error-output ;;
++esac
++fi
++echo "$as_me:$LINENO: result: $ac_cv_prog_gnu_m4_debugfile" >&5
++echo "${ECHO_T}$ac_cv_prog_gnu_m4_debugfile" >&6
++M4_DEBUGFILE=$ac_cv_prog_gnu_m4_debugfile
++
++fi
++
+ if test x"$ac_cv_prog_gnu_m4" != xyes; then
+   { { echo "$as_me:$LINENO: error: GNU M4 1.4 is required" >&5
+ echo "$as_me: error: GNU M4 1.4 is required" >&2;}
+@@ -2776,6 +2793,7 @@ s,@am__tar@,$am__tar,;t t
+ s,@am__untar@,$am__untar,;t t
+ s,@EXPR@,$EXPR,;t t
+ s,@M4@,$M4,;t t
++s,@M4_DEBUGFILE@,$M4_DEBUGFILE,;t t
+ s,@HELP2MAN@,$HELP2MAN,;t t
+ s,@PERL@,$PERL,;t t
+ s,@TEST_EMACS@,$TEST_EMACS,;t t
+diff --git a/doc/Makefile.in b/doc/Makefile.in
+index be47fc16..beb7107a 100644
+--- a/doc/Makefile.in
++++ b/doc/Makefile.in
+@@ -83,6 +83,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/Autom4te/Makefile.in b/lib/Autom4te/Makefile.in
+index 9d475814..24a3d07f 100644
+--- a/lib/Autom4te/Makefile.in
++++ b/lib/Autom4te/Makefile.in
+@@ -81,6 +81,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/Makefile.in b/lib/Makefile.in
+index 3e2c8a9a..777c5597 100644
+--- a/lib/Makefile.in
++++ b/lib/Makefile.in
+@@ -87,6 +87,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/autoconf/Makefile.in b/lib/autoconf/Makefile.in
+index 74daada3..56bd6ca1 100644
+--- a/lib/autoconf/Makefile.in
++++ b/lib/autoconf/Makefile.in
+@@ -83,6 +83,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/autoscan/Makefile.in b/lib/autoscan/Makefile.in
+index 50bda3ad..a6b435d3 100644
+--- a/lib/autoscan/Makefile.in
++++ b/lib/autoscan/Makefile.in
+@@ -79,6 +79,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/autotest/Makefile.in b/lib/autotest/Makefile.in
+index 968b4bb9..f7031603 100644
+--- a/lib/autotest/Makefile.in
++++ b/lib/autotest/Makefile.in
+@@ -83,6 +83,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/emacs/Makefile.in b/lib/emacs/Makefile.in
+index 694a74f6..0d643803 100644
+--- a/lib/emacs/Makefile.in
++++ b/lib/emacs/Makefile.in
+@@ -83,6 +83,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/lib/m4sugar/Makefile.in b/lib/m4sugar/Makefile.in
+index e79b6cb1..b77642e3 100644
+--- a/lib/m4sugar/Makefile.in
++++ b/lib/m4sugar/Makefile.in
+@@ -83,6 +83,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/man/Makefile.in b/man/Makefile.in
+index fd93206e..6b71fed3 100644
+--- a/man/Makefile.in
++++ b/man/Makefile.in
+@@ -73,6 +73,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/man/autom4te.1 b/man/autom4te.1
+index 6613da90..1f532da0 100644
+--- a/man/autom4te.1
++++ b/man/autom4te.1
+@@ -1,5 +1,5 @@
+ .\" DO NOT MODIFY THIS FILE!  It was generated by help2man 1.36.
+-.TH AUTOM4TE "1" "March 2008" "autom4te 2.59" "User Commands"
++.TH AUTOM4TE "1" "December 2008" "autom4te 2.59" "User Commands"
+ .SH NAME
+ autom4te \- Generate files and scripts thanks to M4
+ .SH SYNOPSIS
+diff --git a/tests/Makefile.in b/tests/Makefile.in
+index 87df5b37..46bbfa1c 100644
+--- a/tests/Makefile.in
++++ b/tests/Makefile.in
+@@ -71,6 +71,7 @@ LIBOBJS = @LIBOBJS@
+ LIBS = @LIBS@
+ LTLIBOBJS = @LTLIBOBJS@
+ M4 = @M4@
++M4_DEBUGFILE = @M4_DEBUGFILE@
+ MAKEINFO = @MAKEINFO@
+ PACKAGE = @PACKAGE@
+ PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
+diff --git a/tests/local.at b/tests/local.at
+index 1494391b..be827d9b 100644
+--- a/tests/local.at
++++ b/tests/local.at
+@@ -1,6 +1,6 @@
+ # M4 macros used in building Autoconf test suites.        -*- Autotest -*-
+ 
+-# Copyright (C) 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
++# Copyright (C) 2000, 2001, 2002, 2003, 2008 Free Software Foundation, Inc.
+ 
+ # This program is free software; you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+@@ -33,26 +33,37 @@ AT_TESTED([autom4te autoconf autoheader autoupdate autoreconf ifnames])
+ 
+ # AT_CHECK_AUTOM4TE(FLAGS, [EXIT-STATUS = 0], STDOUT, STDERR)
+ # -----------------------------------------------------------
+-# If stderr is specified, normalize the observed stderr.  E.g. (GNU M4 1.5):
++# If stderr is specified, normalize the observed stderr.
++# This (using GNU M4 1.4.6)
+ #
+-#  /usr/local/bin/m4: script.4s: 1: Cannot open foo: No such file or directory
++#  /usr/local/bin/m4:script.4s:1: cannot open `foo': No such file or directory
+ #  autom4te: /usr/local/bin/m4 failed with exit status: 1
+ #
+-# or (using gm4 as GNU M4 1.4):
++# or this (GNU M4 1.4.11)
++#
++#  /usr/local/bin/m4:script.4s:1: include: cannot open `foo': No such file or directory
++#  autom4te: /usr/local/bin/m4 failed with exit status: 1
++#
++# or this (GNU M4 1.4 installed as gm4)
+ #
+ #  script.4s:1: /usr/local/bin/gm4: Cannot open foo: No such file or directory
+ #  autom4te: /usr/local/bin/m4 failed with exit status: 1
+ #
+ # becomes
+ #
+-#  m4: script.4s: 1: Cannot open foo: No such file or directory
++#  m4:script.4s:1: cannot open `foo': No such file or directory
+ #  autom4te: m4 failed with exit status: 1
+ #
+ # We use the following sed patterns:
+ #
+-#     (file): (line): (m4):
+-# or  (m4): (file): (line):
+-# to  m4: (file): (line):
++#     (m4): ?(file): ?(line):
++# or  (file): ?(line): ?(m4):
++# to  m4:(file):(line):
++#
++# and
++#     m4:(file):(line): Cannot open foo:
++# or  m4:(file):(line): include: cannot open `foo':
++# to  m4:(file):(line): cannot open `foo':
+ #
+ # and
+ #     autom4te: [^ ]m4
+@@ -60,12 +71,14 @@ AT_TESTED([autom4te autoconf autoheader autoupdate autoreconf ifnames])
+ m4_define([AT_CHECK_AUTOM4TE],
+ [AT_CHECK([autom4te $1], [$2], [$3], m4_ifval([$4], [stderr]))
+ m4_ifval([$4],
+-[AT_CHECK([[sed -e 's,^\([^:]*\): *\([0-9][0-9]*\): *[^:]*m4: ,m4: \1: \2: ,' \
+-		-e 's,^[^:]*m4: *\([^:]*\): *\([0-9][0-9]*\): ,m4: \1: \2: ,' \
+-		-e 's/^autom4te: [^ ]*m4 /autom4te: m4 /' \
+-		-e 's/^autom4te: [^ ]*m4.exe /autom4te: m4 /' \
+-		-e 's/ (E[A-Z]*)$//' \
+-	   stderr]], [0],[$4])])
++[AT_CHECK([[sed 's/^[^:]*m4: *\([^:]*:\) *\([0-9][0-9]*: \)/m4:\1\2/
++	s/^\([^:]*:\) *\([0-9][0-9]*:\)[^:]*m4: /m4:\1\2 /
++	s/: C\(annot open \)\([^`:]*\):/: c\1`\2'\'':/
++	s/: include:\( cannot open\)/:\1/
++	s/^autom4te: [^ ]*m4 /autom4te: m4 /
++	s/^autom4te: [^ ]*m4\.exe /autom4te: m4 /
++	s/ (E[A-Z]*)$//
++    ' stderr]], [0],[$4])])
+ ])
+ 
+ 
+diff --git a/tests/m4sugar.at b/tests/m4sugar.at
+index 6ca118c0..b40ab966 100644
+--- a/tests/m4sugar.at
++++ b/tests/m4sugar.at
+@@ -2,7 +2,7 @@
+ 
+ AT_BANNER([M4sugar.])
+ 
+-# Copyright (C) 2000, 2001, 2002 Free Software Foundation, Inc.
++# Copyright (C) 2000, 2001, 2002, 2008 Free Software Foundation, Inc.
+ #
+ # This program is free software; you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+@@ -43,8 +43,7 @@ AT_SETUP([[m4@&t@_warn]])
+ 
+ AT_DATA_M4SUGAR([script.4s],
+ [[m4_init
+-m4_defun([cross_warning],
+-[m4_warn([cross],  [cross])])
++m4_defun([cross_warning], [m4_warn([cross],  [cross])])
+ 
+ m4_divert_push([0])m4_wrap([m4_divert_pop([0])[]])dnl
+ m4_warn([obsolete],  [obsolete])dnl
+@@ -53,27 +52,27 @@ m4_warn([syntax], [syntax])dnl
+ ]])
+ 
+ AT_CHECK_M4SUGAR([-o-], 0, [],
+-[script.4s:8: warning: syntax
++[script.4s:7: warning: syntax
+ ])
+ 
+ AT_CHECK_M4SUGAR([-o- -Wall -f], 0, [],
+-[script.4s:6: warning: obsolete
+-script.4s:7: warning: cross
+-script.4s:3: cross_warning is expanded from...
+-script.4s:7: the top level
+-script.4s:8: warning: syntax
++[script.4s:5: warning: obsolete
++script.4s:6: warning: cross
++script.4s:2: cross_warning is expanded from...
++script.4s:6: the top level
++script.4s:7: warning: syntax
+ ])
+ 
+ AT_CHECK_M4SUGAR([-o- -Wnone,cross -f], 0, [],
+-[script.4s:7: warning: cross
+-script.4s:3: cross_warning is expanded from...
+-script.4s:7: the top level
++[script.4s:6: warning: cross
++script.4s:2: cross_warning is expanded from...
++script.4s:6: the top level
+ ])
+ 
+ AT_CHECK_M4SUGAR([-o- -Wnone,cross,error -f], 1, [],
+-[[script.4s:7: warning: cross
+-script.4s:3: cross_warning is expanded from...
+-script.4s:7: the top level
++[[script.4s:6: warning: cross
++script.4s:2: cross_warning is expanded from...
++script.4s:6: the top level
+ ]])
+ 
+ AT_CLEANUP
+@@ -90,14 +89,11 @@ AT_SETUP([[m4@&t@_require: circular dependencies]])
+ # m4-listification.
+ 
+ AT_DATA_M4SUGAR([script.4s],
+-[[m4_defun([foo],
+-[m4_require([bar])])
++[[m4_defun([foo], [m4_require([bar])])
+ 
+-m4_defun([bar],
+-[m4_require([foo])])
++m4_defun([bar], [m4_require([foo])])
+ 
+-m4_defun([baz],
+-[m4_require([foo])])
++m4_defun([baz], [m4_require([foo])])
+ 
+ m4_init
+ m4_divert_push([0])m4_wrap([m4_divert_pop([0])[]])dnl
+@@ -105,14 +101,14 @@ baz
+ ]])
+ 
+ AT_CHECK_M4SUGAR([], 1, [],
+-[[script.4s:12: error: m4@&t@_require: circular dependency of foo
+-script.4s:12: foo is required by...
+-script.4s:5: bar is expanded from...
+-script.4s:12: bar is required by...
+-script.4s:2: foo is expanded from...
+-script.4s:12: foo is required by...
+-script.4s:8: baz is expanded from...
+-script.4s:12: the top level
++[[script.4s:9: error: m4@&t@_require: circular dependency of foo
++script.4s:9: foo is required by...
++script.4s:3: bar is expanded from...
++script.4s:9: bar is required by...
++script.4s:1: foo is expanded from...
++script.4s:9: foo is required by...
++script.4s:5: baz is expanded from...
++script.4s:9: the top level
+ autom4te: m4 failed with exit status: 1
+ ]])
+ AT_CLEANUP
+diff --git a/tests/tools.at b/tests/tools.at
+index 6516af17..9559ac2f 100644
+--- a/tests/tools.at
++++ b/tests/tools.at
+@@ -2,7 +2,7 @@
+ 
+ AT_BANNER([Executables (autoheader, autoupdate...).])
+ 
+-# Copyright (C) 2000, 2001, 2003 Free Software Foundation, Inc.
++# Copyright (C) 2000, 2001, 2003, 2008 Free Software Foundation, Inc.
+ #
+ # This program is free software; you can redistribute it and/or modify
+ # it under the terms of the GNU General Public License as published by
+@@ -129,7 +129,7 @@ AT_CHECK_M4SUGAR
+ mkdir sub
+ mv foo sub
+ AT_CHECK_M4SUGAR([], [1], [],
+-[m4: script.4s: 1: Cannot open foo: No such file or directory
++[m4:script.4s:1: cannot open `foo': No such file or directory
+ autom4te: m4 failed with exit status: 1
+ ])
+ 
+@@ -169,11 +169,12 @@ TRACE1(foo, TRACE1(bar, baz))
+ TRACE1(foo, active, baz)
+ TRACE1(foo, [active], TRACE1(active, [active]))
+ 
+-# With arguments, multiple lines.
+-TRACE1(foo
+-bar,
+-bar
+-foo)
++# Disable this since m4-1.4.7a behaves differently from m4-1.4.7 and earlier.
++## With arguments, multiple lines.
++#TRACE1(foo
++#bar,
++#bar
++#foo)
+ ]])
+ 
+ # Several --traces.
+@@ -193,8 +194,6 @@ configure.ac:13:TRACE1:ACTIVE:active
+ configure.ac:13:TRACE2:active
+ configure.ac:13:TRACE1:foo:active::ACTIVE
+ configure.ac:13:TRACE2:active::ACTIVE
+-configure.ac:19:TRACE1:foo bar:bar foo
+-configure.ac:19:TRACE2:bar foo
+ ]])
+ 
+ # Several line requests.
+@@ -214,10 +213,6 @@ AT_CHECK_AUTOCONF([[-t TRACE1:'
+ [ACTIVE], [active], [].
+ 
+ [foo], [active], [].
+-
+-[foo
+-bar], [bar
+-foo], [].
+ ]])
+ 
+ # ${sep}@.
+@@ -230,8 +225,6 @@ AT_CHECK_AUTOCONF([-t TRACE2:'${)===(}@'], 0,
+ [ACTIVE])===([baz]
+ [active]
+ [active])===([])===([ACTIVE]
+-[bar
+-foo]
+ ]])
+ 
+ AT_CLEANUP
+-- 

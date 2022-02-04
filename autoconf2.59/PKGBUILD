@@ -1,0 +1,67 @@
+# Maintainer:  Tim Stahlhut <stahta01@gmail.com>
+# Contributor: Alexey Pavlov <alexpux@gmail.com>
+# Contributor: Ray Donnelly <mingw.android@gmail.com>
+
+_realname=autoconf
+pkgname=${_realname}2.59
+pkgver=2.59
+pkgrel=1
+pkgdesc="A GNU tool for automatically configuring source code"
+arch=('any')
+license=('GPL2' 'GPL3' 'custom')
+url="https://www.gnu.org/software/autoconf"
+depends=('awk' 'm4' 'diffutils' 'bash' 'perl')
+makedepends=('gcc' 'make' 'patch')
+checkdepends=('gcc-fortran')
+source=(https://ftp.gnu.org/pub/gnu/${_realname}/${_realname}-${pkgver}.tar.gz{,.sig}
+        0002-2.59-msys2.patch
+        0003-Regenerate-with-autoconf-2.59-automake-1.9.6-m4-1.4.patch
+        0004-Fix-testsuite-to-run-with-newer-M4.patch
+        0005-package.patch
+        0006-autoconf2.5-2.69-perl-5.22-autoscan.patch
+        config.guess
+        config.sub)
+sha256sums=('9cd05c73c5fcb1f5ccae53dd6cac36bb8cb9c7b3e97ffae5a7c05c72594c88d8'
+            'SKIP'
+            '0ca47a9ba4d73957f7754bae73003d66004d4e184d10678ee5fce75f086f1b0a'
+            '7c376231c4389aba6f65b807a3b011cac58fbc199d596f23bc0b2c4b432e845e'
+            'b55f3d281429e67b5816e9d5b6b11fc9619874c98dd07b5ea81322a79174c029'
+            '9d3632027ffde79883771880f3df473b66b67b5d2a53c08968c7552113d345d6'
+            'a1b6aafd4f42b244f8234b45132b130f26d5518ce202ca903c747a50f0020617'
+            'cf610daf8afdedbf2110abd79bdd4121d59080cab5ec46deaf67f97273bb6bda'
+            'deb02c26f43b2ea64276c9ede77ec0f53d08e6256710f3c0a12275712085c348')
+
+prepare() {
+  cd ${srcdir}/${_realname}-${pkgver}
+
+  patch -p1 -i ${srcdir}/0002-2.59-msys2.patch
+  patch -p1 -i ${srcdir}/0003-Regenerate-with-autoconf-2.59-automake-1.9.6-m4-1.4.patch
+  patch -p1 -i ${srcdir}/0004-Fix-testsuite-to-run-with-newer-M4.patch
+  patch -p1 -i ${srcdir}/0005-package.patch
+  patch -p1 -i ${srcdir}/0006-autoconf2.5-2.69-perl-5.22-autoscan.patch
+  cp ${srcdir}/config.guess config/
+  cp ${srcdir}/config.sub config/
+}
+
+build() {
+  cd ${srcdir}/${_realname}-${pkgver}
+  ./configure --prefix=/usr --program-suffix=-2.59
+  make
+}
+
+check() {
+  cd ${srcdir}/${_realname}-${pkgver}
+  make check
+}
+
+package() {
+  cd ${srcdir}/${_realname}-${pkgver}
+  make DESTDIR=${pkgdir} install
+
+  # license exception
+  install -Dm644 COPYING \
+    $pkgdir/usr/share/licenses/autoconf${pkgver}/COPYING
+
+  # conflicts with autoconf
+  rm -rf ${pkgdir}/usr/share/{emacs,info}
+}
