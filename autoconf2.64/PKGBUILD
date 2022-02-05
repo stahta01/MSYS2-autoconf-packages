@@ -1,0 +1,58 @@
+# Maintainer:  Tim Stahlhut <stahta01@gmail.com>
+# Contributor: Alexey Pavlov <alexpux@gmail.com>
+# Contributor: Ray Donnelly <mingw.android@gmail.com>
+
+_realname=autoconf
+pkgname=${_realname}2.64
+pkgver=2.64
+pkgrel=1
+pkgdesc="A GNU tool for automatically configuring source code"
+arch=('any')
+license=('GPL2' 'GPL3' 'custom')
+url="https://www.gnu.org/software/autoconf"
+depends=('awk' 'm4' 'diffutils' 'bash' 'perl')
+makedepends=('gcc' 'make' 'patch')
+checkdepends=('gcc-fortran')
+source=(https://ftp.gnu.org/pub/gnu/${_realname}/${_realname}-${pkgver}.tar.xz{,.sig}
+        0002-2.64-msys2.patch
+        0003-autotest-remove-cr-from-prog-stdout-stderr.patch
+        0005-package.patch
+        0006-autoconf2.5-2.69-perl-5.22-autoscan.patch)
+sha256sums=('32d977213320b8ae76c71175305301197f2b0e04e72d70694bc3d3e2ae6c7248'
+            'SKIP'
+            '1433d5098bbacd985c9b92a645a2b1910ac230f9dfb208e730017ca7320b4415'
+            '74e2135a3f34f5692a77de85c21cb2f0fd8a1dcf396f7fbba7deb0c59faa54eb'
+            'f1dd41ccbfbe66f92a948cb79534e755faf1865bc3338f50b290b0f8b14a2678'
+            'a1b6aafd4f42b244f8234b45132b130f26d5518ce202ca903c747a50f0020617')
+
+prepare() {
+  cd ${srcdir}/${_realname}-${pkgver}
+
+  patch -p1 -i ${srcdir}/0002-2.64-msys2.patch
+  patch -p1 -i ${srcdir}/0003-autotest-remove-cr-from-prog-stdout-stderr.patch
+  patch -p1 -i ${srcdir}/0005-package.patch
+  patch -p1 -i ${srcdir}/0006-autoconf2.5-2.69-perl-5.22-autoscan.patch
+}
+
+build() {
+  cd ${srcdir}/${_realname}-${pkgver}
+  ./configure --prefix=/usr --program-suffix=-2.64
+  make
+}
+
+check() {
+  cd ${srcdir}/${_realname}-${pkgver}
+  make check
+}
+
+package() {
+  cd ${srcdir}/${_realname}-${pkgver}
+  make DESTDIR=${pkgdir} install
+
+  # license exception
+  install -Dm644 COPYING \
+    $pkgdir/usr/share/licenses/autoconf${pkgver}/COPYING
+
+  # conflicts with autoconf
+  rm -rf ${pkgdir}/usr/share/{emacs,info}
+}
