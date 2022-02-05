@@ -10,8 +10,8 @@ arch=('any')
 license=('GPL2' 'GPL3' 'custom')
 url="https://www.gnu.org/software/autoconf"
 depends=('awk' 'm4' 'diffutils' 'bash' 'perl')
-# for test-suite
-makedepends=('gcc-fortran' 'make')
+makedepends=('gcc' 'make' 'patch')
+checkdepends=('gcc-fortran')
 source=(https://ftp.gnu.org/pub/gnu/${_realname}/${_realname}-${pkgver}.tar.xz
         0001-fix-texinfo.patch
         0002-msys2.patch
